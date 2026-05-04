@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "Bash(venv/bin/pip install *)",
+      "Bash(wait)",
+      "Bash(kill %1)",
+      "Bash(venv/bin/pip show *)",
+      "Bash(venv/bin/pip list *)",
+      "WebFetch(domain:search.shopping.naver.com)",
+      "WebFetch(domain:search.11st.co.kr)",
+      "WebSearch",
+      "Bash(echo \"PID=$!\")",
+      "Bash(venv/bin/playwright install *)",
+      "Bash(echo \"exit:$?\")"
+    ]
+  }
+}
