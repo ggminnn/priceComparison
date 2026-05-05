@@ -275,3 +275,9 @@ priceComparison/
 ├── .env.example
 └── requirements.txt
 ```
+
+---
+
+## 상세 동작 흐름
+
+파일별 코드 레벨 분석 → [flow.md](./flow.md)
