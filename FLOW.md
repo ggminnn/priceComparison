@@ -43,11 +43,18 @@
 ```python
 import logging
 from fastapi import FastAPI, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from services.searchService import searchProducts
 
 logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
 
 app = FastAPI(title="Price Comparison API")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse("static/index.html")   # 웹 UI 서빙
 
 @app.get("/search")
 async def search(query: str = Query(..., min_length=1, description="검색어")):
@@ -56,13 +63,14 @@ async def search(query: str = Query(..., min_length=1, description="검색어"))
 ```
 
 **하는 일**
-- FastAPI가 `GET /search?query=...` 요청을 받는다
-- `Query(..., min_length=1)` — 빈 문자열 요청을 FastAPI 레벨에서 차단 (400 반환)
+- `GET /` — `static/index.html`을 반환. 브라우저에서 바로 검색 UI 사용 가능
+- `GET /search?query=...` — 검색 API. `Query(..., min_length=1)`으로 빈 문자열 차단 (400 반환)
+- `app.mount("/static", ...)` — CSS·JS 등 정적 자산 서빙 경로 등록
 - `await searchProducts(query)` — 실제 처리를 서비스 레이어에 위임
-- 결과를 `{"query": ..., "results": [...]}` JSON으로 반환
 
 **설계 포인트**  
-라우터는 HTTP 입출력만 담당. 비즈니스 로직(검색, 정렬)은 서비스 레이어로 분리.
+라우터는 HTTP 입출력만 담당. 비즈니스 로직(검색, 정렬)은 서비스 레이어로 분리.  
+웹 UI와 API가 같은 서버에서 동작하므로 별도 프론트엔드 서버 불필요.
 
 ---
 
@@ -141,7 +149,8 @@ async def crawlNaver(searchQuery: str) -> list[dict]:
                 results.append({
                     "productName": productName,
                     "price": price,
-                    "reviewCount": None,   # API가 제공하지 않음
+                    "reviewCount": None,       # API가 제공하지 않음
+                    "link": item.get("link", ""),
                     "mall": "naver",
                 })
 ```
@@ -177,7 +186,7 @@ from playwright.sync_api import sync_playwright
 # CSS 셀렉터 (실제 DOM 확인 기반, 2025-05)
 ITEM_SEL   = "li.c-search-list__item"
 NAME_SEL   = "div.c-card-item__name dd"
-PRICE_SEL  = "div.c-card-item__price .value"
+PRICE_SEL  = ".c-card-item__price .value"   # div가 아닌 dd 태그 — 태그 제거
 REVIEW_SEL = "dd.c-starrate__review .value"
 
 def _crawlElevenSync(searchQuery: str) -> list[dict]:
@@ -192,11 +201,13 @@ def _crawlElevenSync(searchQuery: str) -> list[dict]:
         items = page.query_selector_all(ITEM_SEL) # 상품 카드 전체 선택
 
         for item in items[:20]:
+            anchorEl = item.query_selector("a.c-card-item__anchor")
             name   = item.query_selector(NAME_SEL).inner_text()
             price  = int(re.sub(r"[^0-9]", "", item.query_selector(PRICE_SEL).inner_text()))
             review = int(re.sub(r"[^0-9]", "", item.query_selector(REVIEW_SEL).inner_text()))
+            link   = anchorEl.get_attribute("href") if anchorEl else ""
             results.append({"productName": name, "price": price,
-                            "reviewCount": review, "mall": "11번가"})
+                            "reviewCount": review, "link": link, "mall": "11번가"})
 
 async def crawlEleven(searchQuery: str) -> list[dict]:
     return await asyncio.to_thread(_crawlElevenSync, searchQuery)
@@ -243,18 +254,24 @@ async def crawlEleven(searchQuery: str) -> list[dict]:
 **11번가 DOM 구조 (실제 확인)**
 
 ```html
-<li class="c-search-list__item">          ← ITEM_SEL
+<li class="c-search-list__item">                          ← ITEM_SEL
+  <a class="c-card-item__anchor" href="https://...">      ← link (href 추출)
+  </a>
   <div class="c-card-item__name">
-    <dd>에어팟 프로 3세대</dd>             ← NAME_SEL
+    <dd>에어팟 프로 3세대</dd>                             ← NAME_SEL
   </div>
-  <div class="c-card-item__price">
-    <span class="value">335,790</span>    ← PRICE_SEL
-  </div>
+  <dd class="c-card-item__price">                         ← PRICE_SEL (dd, div 아님)
+    <span class="value">335,790</span>
+  </dd>
   <dd class="c-starrate__review">
-    <span class="value">(746)</span>      ← REVIEW_SEL
+    <span class="value">(746)</span>                      ← REVIEW_SEL
   </dd>
 </li>
 ```
+
+> `c-card-item__price`는 `dd` 태그. 처음에 `div.c-card-item__price`로 작성해  
+> 111개 요소를 찾고도 가격을 하나도 파싱 못 하는 버그 발생.  
+> 태그명을 제거하고 `.c-card-item__price .value`로 수정해 해결.
 
 ---
 
@@ -267,6 +284,7 @@ async def crawlEleven(searchQuery: str) -> list[dict]:
     "productName": str,        # 상품명
     "price":       int,        # 판매가 (원)
     "reviewCount": int | None, # 리뷰 수 (네이버는 None — API 미제공)
+    "link":        str,        # 상품 페이지 URL
     "mall":        str,        # "naver" | "11번가"
 }
 ```
@@ -274,8 +292,9 @@ async def crawlEleven(searchQuery: str) -> list[dict]:
 | 필드 | 네이버 | 11번가 |
 |------|--------|--------|
 | productName | API `title` 필드 (HTML 태그 제거) | DOM `div.c-card-item__name dd` |
-| price | API `lprice` 필드 | DOM `div.c-card-item__price .value` (숫자만 추출) |
+| price | API `lprice` 필드 | DOM `.c-card-item__price .value` (숫자만 추출) |
 | reviewCount | `None` (API 미제공) | DOM `dd.c-starrate__review .value` (숫자만 추출) |
+| link | API `link` 필드 | DOM `a.c-card-item__anchor`의 `href` 속성 |
 
 ---
 

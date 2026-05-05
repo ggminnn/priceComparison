@@ -15,7 +15,7 @@ maxResults = int(os.getenv("MAX_RESULTS_PER_MALL", "20"))
 # DOM 확인 기반 정확한 셀렉터 (2025-05 기준)
 ITEM_SEL = "li.c-search-list__item"
 NAME_SEL = "div.c-card-item__name dd"
-PRICE_SEL = "div.c-card-item__price .value"
+PRICE_SEL = ".c-card-item__price .value"
 REVIEW_SEL = "dd.c-starrate__review .value"
 
 
@@ -39,15 +39,17 @@ def _crawlElevenSync(searchQuery: str) -> list[dict]:
 
             for item in items[:maxResults]:
                 try:
-                    nameEl = item.query_selector(NAME_SEL)
-                    priceEl = item.query_selector(PRICE_SEL)
+                    nameEl   = item.query_selector(NAME_SEL)
+                    priceEl  = item.query_selector(PRICE_SEL)
                     reviewEl = item.query_selector(REVIEW_SEL)
+                    anchorEl = item.query_selector("a.c-card-item__anchor")
 
                     productName = nameEl.inner_text() if nameEl else ""
-                    rawPrice = priceEl.inner_text() if priceEl else "0"
-                    rawReview = reviewEl.inner_text() if reviewEl else "0"
+                    rawPrice    = priceEl.inner_text() if priceEl else "0"
+                    rawReview   = reviewEl.inner_text() if reviewEl else "0"
+                    link        = anchorEl.get_attribute("href") if anchorEl else ""
 
-                    price = int(re.sub(r"[^0-9]", "", rawPrice) or 0)
+                    price       = int(re.sub(r"[^0-9]", "", rawPrice) or 0)
                     reviewCount = int(re.sub(r"[^0-9]", "", rawReview) or 0)
 
                     if productName and price > 0:
@@ -55,6 +57,7 @@ def _crawlElevenSync(searchQuery: str) -> list[dict]:
                             "productName": productName.strip(),
                             "price": price,
                             "reviewCount": reviewCount,
+                            "link": link,
                             "mall": "11번가",
                         })
                     else:

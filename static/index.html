@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>최저가 비교</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f6f8;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e8eaed;
+      padding: 20px 0;
+      text-align: center;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.3px; }
+    header p { font-size: 0.82rem; color: #888; margin-top: 4px; }
+
+    .search-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px 24px;
+    }
+    .search-box {
+      display: flex;
+      width: 100%;
+      max-width: 560px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+    }
+    .search-box input {
+      flex: 1;
+      padding: 14px 18px;
+      font-size: 1rem;
+      border: none;
+      outline: none;
+      background: #fff;
+    }
+    .search-box button {
+      padding: 14px 24px;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .search-box button:hover { background: #2563eb; }
+    .search-box button:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    .container { max-width: 900px; margin: 0 auto; padding: 0 16px 48px; }
+
+    /* 상태 메시지 */
+    .state {
+      text-align: center;
+      padding: 60px 0;
+      color: #aaa;
+      font-size: 0.95rem;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e0e7ff;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 요약 바 */
+    .summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 4px;
+      font-size: 0.85rem;
+      color: #666;
+    }
+    .summary strong { color: #1a1a2e; }
+
+    /* 테이블 */
+    .table-wrap {
+      background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #f8f9fb;
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #888;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      border-bottom: 1px solid #eef0f3;
+    }
+    thead th.right { text-align: right; }
+
+    tbody tr { border-bottom: 1px solid #f0f2f5; transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8faff; }
+
+    td { padding: 14px 16px; font-size: 0.9rem; vertical-align: middle; }
+    td.rank { color: #bbb; font-size: 0.8rem; width: 36px; }
+    td.rank.top { color: #f59e0b; font-weight: 700; }
+    td.name { max-width: 340px; line-height: 1.45; }
+    td.name a { color: inherit; text-decoration: none; }
+    td.name a:hover { color: #3b82f6; text-decoration: underline; }
+    td.price { text-align: right; font-weight: 700; font-size: 0.95rem; white-space: nowrap; }
+    td.review { text-align: right; color: #888; font-size: 0.82rem; }
+    td.mall { width: 80px; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge.naver  { background: #e8f5e9; color: #2e7d32; }
+    .badge.eleven { background: #fff3e0; color: #e65100; }
+
+    .lowest-tag {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #3b82f6;
+      background: #eff6ff;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .error-box {
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      border-radius: 10px;
+      padding: 20px;
+      color: #be123c;
+      font-size: 0.88rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 최저가 비교</h1>
+  <p>네이버쇼핑 · 11번가 동시 검색 후 가격 낮은 순 정렬</p>
+</header>
+
+<div class="search-wrap">
+  <div class="search-box">
+    <input id="queryInput" type="text" placeholder="검색어를 입력하세요 (예: 에어팟 프로)" />
+    <button id="searchBtn" onclick="doSearch()">검색</button>
+  </div>
+</div>
+
+<div class="container">
+  <div id="result">
+    <div class="state">검색어를 입력하면 두 쇼핑몰을 동시에 조회합니다.</div>
+  </div>
+</div>
+
+<script>
+  const input = document.getElementById('queryInput');
+  const btn   = document.getElementById('searchBtn');
+  const box   = document.getElementById('result');
+
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  function fmt(n) {
+    return Number(n).toLocaleString('ko-KR') + '원';
+  }
+
+  function mallBadge(mall) {
+    if (mall === 'naver') return '<span class="badge naver">네이버</span>';
+    return '<span class="badge eleven">11번가</span>';
+  }
+
+  async function doSearch() {
+    const query = input.value.trim();
+    if (!query) { input.focus(); return; }
+
+    btn.disabled = true;
+    box.innerHTML = `
+      <div class="state">
+        <div class="spinner"></div>
+        <div>두 쇼핑몰에서 검색 중...</div>
+      </div>`;
+
+    try {
+      const res  = await fetch('/search?query=' + encodeURIComponent(query));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      render(data.query, data.results);
+    } catch (e) {
+      box.innerHTML = `<div class="error-box">오류가 발생했습니다: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function render(query, items) {
+    if (!items.length) {
+      box.innerHTML = `<div class="state">"${query}" 검색 결과가 없습니다.</div>`;
+      return;
+    }
+
+    const naverCnt  = items.filter(i => i.mall === 'naver').length;
+    const elevenCnt = items.filter(i => i.mall === '11번가').length;
+
+    const rows = items.map((item, idx) => {
+      const isLowest  = idx === 0;
+      const rankClass = idx < 3 ? 'rank top' : 'rank';
+      const lowestTag = isLowest ? '<span class="lowest-tag">최저가</span>' : '';
+      const review    = item.reviewCount != null ? item.reviewCount.toLocaleString() : '-';
+      const nameHtml  = item.link
+        ? `<a href="${item.link}" target="_blank" rel="noopener noreferrer">${item.productName}</a>`
+        : item.productName;
+      return `
+        <tr>
+          <td class="${rankClass}">${idx + 1}</td>
+          <td class="name">${nameHtml}${lowestTag}</td>
+          <td class="price">${fmt(item.price)}</td>
+          <td class="review">${review}</td>
+          <td class="mall">${mallBadge(item.mall)}</td>
+        </tr>`;
+    }).join('');
+
+    box.innerHTML = `
+      <div class="summary">
+        <span>
+          "<strong>${query}</strong>" 검색 결과
+          <strong>${items.length}</strong>개
+          (네이버 ${naverCnt} · 11번가 ${elevenCnt})
+        </span>
+        <span>가격 낮은 순</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>상품명</th>
+              <th class="right">가격</th>
+              <th class="right">리뷰</th>
+              <th>쇼핑몰</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+</script>
+</body>
+</html>

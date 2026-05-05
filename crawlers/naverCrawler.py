@@ -44,6 +44,7 @@ async def crawlNaver(searchQuery: str) -> list[dict]:
                             "productName": productName,
                             "price": price,
                             "reviewCount": None,  # 네이버 쇼핑 API 미제공
+                            "link": item.get("link", ""),
                             "mall": "naver",
                         })
                 except Exception as e:
